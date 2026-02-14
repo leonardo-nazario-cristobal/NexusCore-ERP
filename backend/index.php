@@ -1,5 +1,6 @@
 <?php
 
+
 // Headers API
 header("Content-Type: application/json");
 
@@ -22,3 +23,4 @@ require_once __DIR__ . '/utils/response.php';
 
 // Rutas
 require_once __DIR__ . '/routes/api.php';
+
