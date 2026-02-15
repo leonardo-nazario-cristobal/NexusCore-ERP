@@ -83,4 +83,13 @@ class Response {
       self::send(false, $data, $message, 500);
    }
 
+   // Método genérico de error (NUEVO)
+   public static function error(
+      string $message,
+      int $status = 500,
+      $data = null
+   ) {
+      self::send(false, $data, $message, $status);
+   }
+
 }

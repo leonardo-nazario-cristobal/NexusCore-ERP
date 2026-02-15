@@ -72,4 +72,58 @@ class Usuario {
       $stmt = $this->db->query($sql);
       return $stmt->fetchAll();
    }
+
+   // Actualizar usuario
+   public function update($id, $data) {
+      $fields = [];
+      $params = [':id' => $id];
+
+      if  (isset($data['nombre'])) {
+         $fields[] = "nombre = :nombre";
+         $params[':nombre'] = $data['nombre'];
+      }
+
+      if (isset($data['correo'])) {
+         $fields[] = "correo = :correo";
+         $params[':correo'] = $data['correo'];
+      }
+
+      if (isset($data['rol'])) {
+         $fields[] = "rol = :rol";
+         $params[':rol'] = $data['rol'];
+      }
+
+      if (isset($data['activo'])) {
+         $fields[] = "activo = :activo";
+         $params[':activo'] = $data['activo'];
+      }
+
+      if (empty($fields)) {
+         return false;
+      }
+
+      $sql = "UPDATE usuarios SET "
+            . implode(', ', $fields)
+            . " WHERE id = :id
+               RETURNING id, nombre, correo, rol, activo";
+      
+      $stmt = $this->db->prepare($sql);
+      $stmt->execute($params);
+
+      return $stmt->fetch();
+   }
+
+   // Desactivar Usuario
+   public function deactivate($id) {
+
+      $sql = "UPDATE usuarios
+            SET activo = false
+            WHERE id = :id
+            RETURNING id, nombre, correo, rol, activo";
+
+      $stmt = $this->db->prepare($sql);
+      $stmt->execute([':id' => $id]);
+
+      return $stmt->fetch();
+   }
 }

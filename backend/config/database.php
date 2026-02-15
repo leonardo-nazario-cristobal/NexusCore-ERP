@@ -23,7 +23,6 @@ class Database {
             PDO::ATTR_EMULATE_PREPARES => false
          ]);
 
-         echo("conected");
          return $pdo;
 
       } catch (PDOException $e) {

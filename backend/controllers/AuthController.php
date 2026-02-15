@@ -72,6 +72,11 @@ class AuthController {
          Response::unauthorized("Credenciales incorrectas");
       }
 
+      // Bloquear usuarios desactivados
+      if (!$user['activo']) {
+         Response::forbidden("Usuario Desactivado");
+      }
+
       $token = $this->generateJWT($user);
 
       unset($user['password']);
