@@ -14,7 +14,6 @@ class Producto {
    public function create($data) {
 
       $sql = "INSERT INTO productos (
-                  codigo_barras,
                   nombre,
                   descripcion,
                   precio,
@@ -23,7 +22,6 @@ class Producto {
                   id_categoria
                )
                VALUES (
-                  :codigo_barras,
                   :nombre,
                   :descripcion,
                   :precio,
@@ -31,12 +29,11 @@ class Producto {
                   :stock_minimo,
                   :id_categoria
                )
-               RETURNING id, codigo_barras, nombre, precio, stock, activo";
+               RETURNING id, id_categoria";
 
       $stmt = $this->db->prepare($sql);
 
       $stmt->execute([
-         ':codigo_barras' => $data['codigo_barras'] ?? null,
          ':nombre' => $data['nombre'],
          ':descripcion' => $data['descripcion'] ?? null,
          ':precio' => $data['precio'],
@@ -45,7 +42,42 @@ class Producto {
          ':id_categoria' => $data['id_categoria'] ?? null
       ]);
 
-      return $stmt->fetch();
+      $producto = $stmt->fetch();
+
+      $codigo = $this->generarCodigoBarras(
+         $producto['id_categoria'],
+         $producto['id']
+      );
+
+      $update = $this->db->prepare(
+         "UPDATE productos
+            SET codigo_barras = :codigo
+            WHERE id = :id"
+      );
+
+      $update->execute([
+         ':codigo' => $codigo,
+         ':id' => $producto['id']
+      ]);
+
+      $final = $this->db->prepare(
+         "SELECT id, codigo_barras, nombre, precio, stock, activo
+            FROM productos
+            WHERE id = :id"
+      );
+
+      $final->execute([':id' => $producto['id']]);
+
+      return $final->fetch();
+   }
+
+   private function generarCodigoBarras($categoriaId, $productoId) {
+
+      $cat = str_pad($categoriaId, 2, "0", STR_PAD_LEFT);
+
+      $seq = str_pad($productoId, 8, "0", STR_PAD_LEFT);
+
+      return $cat . "-" . $seq;
    }
 
    // Listar Productos
