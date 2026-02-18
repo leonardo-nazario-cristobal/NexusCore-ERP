@@ -81,13 +81,25 @@ class Producto {
    }
 
    // Listar Productos
-   public function all() {
+   public function list() {
 
-      $sql = "SELECT id, codigo_barras, nombre, descripcion, precio, stock, stock_minimo, id_categoria, activo
-            FROM productos
-            ORDER BY id DESC";
-      
-      $stmt = $this->db->query($sql);
+      $sql = "SELECT 
+                  p.id,
+                  p.codigo_barras,
+                  p.nombre,
+                  p.precio,
+                  p.stock,
+                  p.activo,
+                  c.nombre AS categoria
+               FROM productos p
+               LEFT JOIN categorias c
+                  ON p.id_categoria = c.id
+               WHERE p.activo = true
+               ORDER BY p.id DESC";
+         
+      $stmt = $this->db->prepare($sql);
+      $stmt->execute();
+
       return $stmt->fetchAll();
    }
 
@@ -159,4 +171,5 @@ class Producto {
 
       return $stmt->fetch();
    }
+
 }

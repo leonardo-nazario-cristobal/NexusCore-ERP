@@ -23,11 +23,16 @@ class ProductoController {
          Response::badRequest("JSON Invalido");
       }
 
-      if (
-         empty($input['nombre']) ||
-         !isset($input['precio'])
-      ) {
+      if (empty($input['nombre'])) {
          Response::validationError(null, "Nombre y Precio son Obligatorios");
+      }
+
+      if ($input['precio'] < 0) {
+         Response::validationError(null, "El precio no puede ser negativo");
+      }
+
+      if (isset($input['stock']) && $input['stock'] < 0) {
+         Response::validationError(null, "Stock inválido");
       }
 
       try {
@@ -44,9 +49,9 @@ class ProductoController {
 
       $user = AuthMiddleware::verify();
 
-      $productos = $this->productoModel->all();
+      $productos = $this->productoModel->list();
 
-      Response::ok($productos, "Lista de Productos");
+      Response::ok($productos, "Lista de Productos con Categoria");
    }
 
    // Update productos
@@ -76,12 +81,6 @@ class ProductoController {
       $user = AuthMiddleware::verify();
       RoleMiddleware::allow($user, ['admin']);
 
-      // No permitir auto-desactivarse
-      // if ($user['sub'] == $id) {
-      //    Response::error("No puedes desactivarte a ti mismo", 400);
-      //    return;
-      // }
-
       $updatedProducto = $this->productoModel->deactivate($id);
 
       if (!$updatedProducto) {
@@ -91,4 +90,5 @@ class ProductoController {
 
       Response::ok($updatedProducto, "Producto Desactivado");
    }
+
 }

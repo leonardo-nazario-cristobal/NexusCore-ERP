@@ -6,6 +6,8 @@ require_once __DIR__ . '/../utils/roleMiddleware.php';
 require_once __DIR__ . '/../controllers/UserController.php';
 require_once __DIR__ . '/../controllers/ProductoController.php';
 require_once __DIR__ . '/../controllers/CategoriaController.php';
+require_once __DIR__ . '/../controllers/MovimientoInventarioController.php';
+require_once __DIR__ . '/../controllers/CompraController.php';
 require_once __DIR__ . '/../utils/response.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -15,6 +17,8 @@ $auth = new AuthController();
 $userController = new UserController();
 $productoController = new ProductoController();
 $catController = new CategoriaController();
+$movController = new MovimientoInventarioController();
+$compController = new CompraController();
 
 // ===== Auth =====
 
@@ -155,6 +159,34 @@ if (preg_match('#^/api/categories/(\d+)$#', $path, $matches)) {
       $catController->destroy($matches[1]);
       return;
    }
+}
+
+// ===== Movimientos Inventario =====
+
+// Crear Movimiento
+if ($path === '/api/inventory-movements' && $method === 'POST') {
+   $movController->store();
+   return;
+}
+
+// Listar Historial
+if ($path === '/api/inventory-movements' && $method === 'GET') {
+   $movController->index();
+   return;
+}
+
+// ===== Compras =====
+
+// crear
+if ($path === '/api/purchases' && $method === 'POST') {
+   $compController->store();
+   return;
+}
+
+// Listar compras
+if ($path === '/api/purchases' && $method === 'GET') {
+   $compController->index();
+   return;
 }
 
 // Not Found

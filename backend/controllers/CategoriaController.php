@@ -32,6 +32,7 @@ class CategoriaController {
 
    // Listar
    public function index() {
+      AuthMiddleware::verify();
       $cats = $this->catModel->all();
       Response::ok($cats, "Lista Categorias");
    }
