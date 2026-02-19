@@ -8,6 +8,8 @@ require_once __DIR__ . '/../controllers/ProductoController.php';
 require_once __DIR__ . '/../controllers/CategoriaController.php';
 require_once __DIR__ . '/../controllers/MovimientoInventarioController.php';
 require_once __DIR__ . '/../controllers/CompraController.php';
+require_once __DIR__ . '/../controllers/VentaController.php';
+require_once __DIR__ . '/../controllers/ProveedorController.php';
 require_once __DIR__ . '/../utils/response.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -19,6 +21,8 @@ $productoController = new ProductoController();
 $catController = new CategoriaController();
 $movController = new MovimientoInventarioController();
 $compController = new CompraController();
+$ventController = new VentaController();
+$provController = new ProveedorController();
 
 // ===== Auth =====
 
@@ -187,6 +191,48 @@ if ($path === '/api/purchases' && $method === 'POST') {
 if ($path === '/api/purchases' && $method === 'GET') {
    $compController->index();
    return;
+}
+
+// ===== Ventas =====
+
+// Crear Venta
+if ($path === '/api/sales' && $method === 'POST') {
+   $ventController->store();
+   return;
+}
+
+// Listar Venta
+if ($path === '/api/sales' && $method === 'GET') {
+   $ventController->index();
+   return;
+}
+
+// Detalle de Venta
+if (preg_match('#^/api/sales/(\d+)$#', $path, $matches)) {
+
+   if ($method === 'GET') {
+      $ventController->show($matches[1]);
+      return;
+   }
+}
+
+// ===== Proveedores =====
+
+// Crear
+if ($path === '/api/providers' && $method === 'POST') {
+   $provController->store();
+   return;
+}
+
+if ($path === '/api/providers' && $method === 'GET') {
+   $provController->index();
+   return;
+}
+
+if (preg_match('#^/api/providers/(\d+)$#', $path, $matches)) {
+   if ($method === 'GET') {
+      $provController->show($matches[1]);
+   }
 }
 
 // Not Found
