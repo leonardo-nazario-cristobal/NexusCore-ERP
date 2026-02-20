@@ -57,7 +57,7 @@ class UserController {
 
       $rol = $input['rol'] ?? 'cajero';
       try {
-         $newUser = $this->usuarioModel->crate(
+         $newUser = $this->usuarioModel->create(
             $input['nombre'],
             $input['correo'],
             $input['password'],
@@ -67,7 +67,7 @@ class UserController {
          Response::created($newUser, "Usuario Creado");
 
       } catch (PDOException $e) {
-         Response::conflic("Correo Duplicado");
+         Response::conflict("Correo Duplicado");
       }
    }
 
