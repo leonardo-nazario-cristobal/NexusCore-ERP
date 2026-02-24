@@ -1,9 +1,9 @@
 <?php
 
-require_once __DIR__ . '/env.php';
-
+declare (strict_types=1);
 class Database {
-   public static function getConnection() {
+
+   public static function getConnection(): PDO {
       $host = getenv('DB_HOST');
       $db   = getenv('DB_NAME');
       $user = getenv('DB_USER');
@@ -11,22 +11,25 @@ class Database {
       $port = getenv('DB_PORT');
 
       if (!$host || !$db || !$user) {
-         throw new Exception("Missing environment variables");
+         throw new RuntimeException("Database Envirinment Variables Are Missing.");
       }
 
-      $dsn = "pgsql:host=$host;port=$port;dbname=$db;options='--client_encoding=UTF8'";
+      $dsn = sprintf(
+         "pgsql:host=%s;port=%s;dbname=%s;options='--client_encoding=UTF8'",
+         $host,
+         $port,
+         $db
+      );
 
       try {
-         $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+         return new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false
+            PDO::ATTR_EMULATE_PREPARES   => false,
          ]);
 
-         return $pdo;
-
       } catch (PDOException $e) {
-         throw new Exception("Database connection failed");
+         throw new RuntimeException("Database connection failed.");
       }
    }
 }

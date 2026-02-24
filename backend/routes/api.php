@@ -1,5 +1,8 @@
 <?php
 
+declare (strict_types=1);
+
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../controllers/AuthController.php';
 require_once __DIR__ . '/../utils/authMiddleware.php';
 require_once __DIR__ . '/../utils/roleMiddleware.php';
@@ -15,24 +18,28 @@ require_once __DIR__ . '/../utils/response.php';
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 
-$auth = new AuthController();
-$userController = new UserController();
-$productoController = new ProductoController();
-$catController = new CategoriaController();
-$movController = new MovimientoInventarioController();
-$compController = new CompraController();
-$ventController = new VentaController();
-$provController = new ProveedorController();
+$pdo = Database::getConnection();
 
-// ===== Auth =====
+$auth = new AuthController($pdo);
+$userController = new UserController($pdo);
+$catController = new CategoriaController($pdo);
+$provController = new ProveedorController($pdo);
+$producController = new ProductoController($pdo);
+$compController = new CompraController($pdo);
+$ventController = new VentaController($pdo);
+$movController = new MovimientoInventarioController($pdo);
 
-// Registrar
-if ($path === '/api/register' && $method === 'POST') {
+/* ===== Auth ===== */
+
+/* Registrar */
+
+if ($path === '/api/registrar' && $method === 'POST') {
    $auth->register();
    return;
 }
 
-// login
+/* login */
+
 if ($path === '/api/login' && $method === 'POST') {
    $auth->login();
    return;
@@ -49,191 +56,248 @@ if ($path === '/api/private-test' && $method === 'GET') {
    return;
 }
 
-// ===== Usuarios =====
-// Listar Usuarios
-if ($path === '/api/users' && $method === 'GET') {
+/* ===== Usuarios ===== */
 
-   $user = AuthMiddleware::verify();
+/* Listar Usuarios */
 
-   RoleMiddleware::allow($user, ['admin']);
+if ($path === '/api/usuarios' && $method === 'GET') {
 
    $userController->index();
    return;
+
 }
 
-// Crear Usuarios
-if ($path === '/api/users' && $method === 'POST') {
-   
-   $user = AuthMiddleware::verify();
+/* Crear Usuarios */
 
-   RoleMiddleware::allow($user, ['admin']);
+if ($path === '/api/usuarios' && $method === 'POST') {
 
    $userController->store();
    return;
+
 }
 
-if (preg_match('#^/api/users/(\d+)$#', $path, $matches)) {
-
-   $user = AuthMiddleware::verify();
-
-   RoleMiddleware::allow($user, ['admin']);
+if (preg_match('#^/api/usuarios/(\d+)$#', $path, $matches)) {
    
-   // buscar por ID
+   $id = (int) $matches[1];
+
+   /* buscar por ID */
+
    if ($method === 'GET') {
-      $userController->show($matches[1]);
+      $userController->show($id);
       return;
    }
 
-   // Update
-   if ($method === 'PUT') {
-      $userController->update($matches[1]);
-      return;
-   }
-
-   // Delete
-   if ($method === 'DELETE') {
-      $userController->destroy($matches[1]);
-      return;
-   }
-}
-
-// ===== Productos =====
-
-// Crear Productos
-if ($path === '/api/products' && $method === 'POST') {
-
-   $user = AuthMiddleware::verify();
-
-   RoleMiddleware::allow($user, ['admin']);
-   $productoController->store();
-   return;
-}
-
-// Listar Productos
-if ($path === '/api/products' && $method === 'GET') {
-   $productoController->index();
-   return;
-}
-
-if (preg_match('#^/api/products/(\d+)$#', $path, $matches)) {
-
-   $user = AuthMiddleware::verify();
-
-   RoleMiddleware::allow($user, ['admin']);
+   /* Actualizar */
 
    if ($method === 'PUT') {
-      $productoController->update($matches[1]);
+      $userController->update($id);
       return;
    }
 
+   /* Bloquear */
+
    if ($method === 'DELETE') {
-      $productoController->destroy($matches[1]);
+      $userController->destroy($id);
       return;
    }
 }
 
-// ===== Categorias =====
+/* ===== Categorias ===== */
 
-// Crear
-if ($path === '/api/categories' && $method === 'POST') {
+/* Crear */
+
+if ($path === '/api/categorias' && $method === 'POST') {
    $catController->store();
    return;
 }
 
-// Listar
-if ($path === '/api/categories' && $method === 'GET') {
+/* Listar */
+
+if ($path === '/api/categorias' && $method === 'GET') {
    $catController->index();
    return;
 }
 
-// ID
-if (preg_match('#^/api/categories/(\d+)$#', $path, $matches)) {
+if (preg_match('#^/api/categorias/(\d+)$#', $path, $matches)) {
+
+$id = (int) $matches[1];
+
+   /* Buscar por ID */
 
    if ($method === 'GET') {
-      $catController->show($matches[1]);
+      $catController->show($id);
       return;
    }
+
+   /* Actualizar */
 
    if ($method === 'PUT') {
-      $catController->update($matches[1]);
+      $catController->update($id);
       return;
    }
+
+   /* Eliminar */
 
    if ($method === 'DELETE') {
-      $catController->destroy($matches[1]);
+      $catController->destroy($id);
       return;
    }
 }
 
-// ===== Movimientos Inventario =====
+/* ===== Proveedores ===== */
 
-// Crear Movimiento
-if ($path === '/api/inventory-movements' && $method === 'POST') {
-   $movController->store();
-   return;
-}
+/* Crear */
 
-// Listar Historial
-if ($path === '/api/inventory-movements' && $method === 'GET') {
-   $movController->index();
-   return;
-}
-
-// ===== Compras =====
-
-// crear
-if ($path === '/api/purchases' && $method === 'POST') {
-   $compController->store();
-   return;
-}
-
-// Listar compras
-if ($path === '/api/purchases' && $method === 'GET') {
-   $compController->index();
-   return;
-}
-
-// ===== Ventas =====
-
-// Crear Venta
-if ($path === '/api/sales' && $method === 'POST') {
-   $ventController->store();
-   return;
-}
-
-// Listar Venta
-if ($path === '/api/sales' && $method === 'GET') {
-   $ventController->index();
-   return;
-}
-
-// Detalle de Venta
-if (preg_match('#^/api/sales/(\d+)$#', $path, $matches)) {
-
-   if ($method === 'GET') {
-      $ventController->show($matches[1]);
-      return;
-   }
-}
-
-// ===== Proveedores =====
-
-// Crear
-if ($path === '/api/providers' && $method === 'POST') {
+if ($path === '/api/proveedores' && $method === 'POST') {
    $provController->store();
    return;
 }
 
-if ($path === '/api/providers' && $method === 'GET') {
+/* Listar */
+
+if ($path === '/api/proveedores' && $method === 'GET') {
    $provController->index();
    return;
 }
 
-if (preg_match('#^/api/providers/(\d+)$#', $path, $matches)) {
+if (preg_match('#^/api/proveedores/(\d+)$#', $path, $matches)) {
+
+   $id = (int) $matches[1];
+
+   /* Buscar por ID*/
+
    if ($method === 'GET') {
-      $provController->show($matches[1]);
+      $provController->show($id);
+   }
+
+   /* Actualizar */
+   
+   if ($method === 'PUT') {
+      $provController->update($id);
+   }
+
+   /* Eliminar */
+
+   if ($method === 'DELETE') {
+      $provController->destroy($id);
    }
 }
 
+/* ===== Productos ===== */
+
+/* Crear Productos */
+
+if ($path === '/api/productos' && $method === 'POST') {
+   $producController->store();
+   return;
+}
+
+/* Listar Productos */
+
+if ($path === '/api/productos' && $method === 'GET') {
+   $producController->index();
+   return;
+}
+
+if (preg_match('#^/api/productos/(\d+)$#', $path, $matches)) {
+
+$id = (int) $matches[1];
+
+   /* Buscar por ID */
+
+   if ($method === 'GET') {
+      $producController->show($id);
+   }
+
+   /* Actualizar */
+
+   if ($method === 'PUT') {
+      $producController->update($id);
+      return;
+   }
+
+   /* Desactivar */
+
+   if ($method === 'DELETE') {
+      $producController->destroy($id);
+      return;
+   }
+}
+
+/* ===== Compras ===== */
+
+/* crear */
+
+if ($path === '/api/compras' && $method === 'POST') {
+   $compController->store();
+   return;
+}
+
+/* Listar compras */
+
+if ($path === '/api/compras' && $method === 'GET') {
+   $compController->index();
+   return;
+}
+
+if (preg_match('#^/api/compras/(\d+)$#', $path, $matches)) {
+
+   $id = (int) $matches[1];
+
+   /* Buscar por ID */
+
+   if ($method === 'GET') {
+      $compController->show($id);
+      return;
+   }
+
+}
+
+/* ===== Ventas ===== */
+
+/* Crear Venta */
+
+if ($path === '/api/ventas' && $method === 'POST') {
+   $ventController->store();
+   return;
+}
+
+/* Listar Venta */
+
+if ($path === '/api/ventas' && $method === 'GET') {
+   $ventController->index();
+   return;
+}
+
+/* Detalle de Venta */
+
+if (preg_match('#^/api/ventas/(\d+)$#', $path, $matches)) {
+
+   $id = (int) $matches[1];
+
+   /* Buscar por ID */
+
+   if ($method === 'GET') {
+      $ventController->show($id);
+      return;
+   }
+}
+
+/* ===== Movimientos Inventario ===== */
+
+/* Crear Movimiento */
+
+if ($path === '/api/inventario' && $method === 'POST') {
+   $movController->store();
+   return;
+}
+
+/* Listar Historial */
+
+if ($path === '/api/inventario' && $method === 'GET') {
+   $movController->index();
+   return;
+}
+
 // Not Found
-Response::notFound("Ruta no Encontrada");
+Response::notFound("Ruta no Encontrada.");

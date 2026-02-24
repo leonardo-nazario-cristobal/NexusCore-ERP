@@ -1,81 +1,96 @@
 <?php
 
-require_once __DIR__ . '/../config/database.php';
+declare (strict_types=1);
 
 class Categoria {
 
-   private $db;
+   private PDO $db;
 
-   public function __construct() {
-      $this->db = Database::getConnection();
+   public function __construct(PDO $connection) {
+      $this->db =  $connection;
    }
 
-   // Crear
-   public function create($data) {
+   /* Crear */
+
+   public function create(array $data): array {
 
       $sql = "INSERT INTO categorias (nombre, descripcion)
                VALUES (:nombre, :descripcion)
-               RETURNING id, nombre, descripcion";
+               RETURNING id, nombre, descripcion
+      ";
       
       $stmt = $this->db->prepare($sql);
       $stmt->execute([
-         ':nombre' => $data['nombre'],
+         ':nombre'      => trim($data['nombre']),
          ':descripcion' => $data['descripcion'] ?? null
       ]);
 
-      return $stmt->fetch();
+      return $stmt->fetch(PDO::FETCH_ASSOC);
    }
 
-   // Listar
-   public function all() {
+   /* Listar */
+
+   public function all(): array {
 
       $sql = "SELECT id, nombre, descripcion
                FROM categorias
-               ORDER BY id DESC";
+               ORDER BY id DESC
+      ";
       
-      return $this->db->query($sql)->fetchAll();
+      return $this->db
+            ->query($sql)
+            ->fetchAll(PDO::FETCH_ASSOC);
    }
 
-   // Mostrar una por ID
-   public function find($id) {
+   /* Buscar por ID */
+
+   public function find(int $id): ?array {
 
       $sql = "SELECT id, nombre, descripcion
                FROM categorias
-               WHERE id = :id";
+               WHERE id = :id
+      ";
 
       $stmt = $this->db->prepare($sql);
       $stmt->execute([':id' => $id]);
 
-      return $stmt->fetch();
+      $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      return $result ?: null;
    }
 
-   // Actualizar
-   public function update($id, $data) {
+   /* Actualizar */
+
+   public function update(int $id, array $data): ?array {
       
       $sql = "UPDATE categorias
                SET nombre = :nombre,
                   descripcion = :descripcion
                WHERE id = :id
-               RETURNING id, nombre, descripcion";
+               RETURNING id, nombre, descripcion
+      ";
+
       $stmt = $this->db->prepare($sql);
       $stmt->execute([
-         ':id' => $id,
-         ':nombre' => $data['nombre'],
+         ':id'          => $id,
+         ':nombre'      => $data['nombre'],
          ':descripcion' => $data['descripcion'] ?? null
       ]);
 
-      return $stmt->fetch();
+      $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      return $result ?: null;
    }
 
-   // Eliminar
-   public function delete($id) {
+   /* Eliminar */
 
-      $sql = "DELETE FROM categorias
-               WHERE id = :id";
+   public function delete(int $id): bool {
+
+      $sql = "DELETE FROM categorias WHERE id = :id";
       
       $stmt = $this->db->prepare($sql);
       $stmt->execute([':id' => $id]);
 
-      return $stmt->rowCount();
+      return $stmt->rowCount() < 0;
    }
 }

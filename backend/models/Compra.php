@@ -1,20 +1,32 @@
 <?php
 
-require_once __DIR__ .  '/../config/database.php';
+declare (strict_types=1);
 
 class Compra {
 
-   private $db;
+   private PDO $db;
 
-   public function __construct() {
-      $this->db = Database::getConnection();
+   public function __construct(PDO $connection) {
+      $this->db = $connection;
    }
 
-   public function create($data, $userId) {
+   /* Crear Compra */
+
+   public function create(array $data, int $userId): array {
+
+      if (empty($data['id_proveedor'])) {
+         throw new InvalidArgumentException("Proveedor Requerido.");
+      }
+
+      if (empty($data['detalles']) || !is_array($data['detalles'])) {
+         throw new InvalidArgumentException("Compra Sin Detalles.");
+      }
 
       try {
-         // Iniciar Transaccion
+
          $this->db->beginTransaction();
+
+         /* Crear Compra */
 
          $stmt = $this->db->prepare(
             "INSERT INTO compras (id_proveedor)
@@ -22,87 +34,116 @@ class Compra {
             RETURNING id"
          );
 
-         $stmt->execute([
-            ':prov' => $data['id_proveedor']
-         ]);
+         $stmt->execute([':prov' => $data['id_proveedor']]);
 
-         $compraId = $stmt->fetch()['id'];
+         $compraId = (int) $stmt->fetch(PDO::FETCH_ASSOC)['id'];
 
          $total = 0;
-
-         if (empty($data['detalles'])) {
-            throw new Exception("Compra sin detalles");
-         }
 
          // Procesar Detalles
          foreach ($data['detalles'] as $d) {
 
-            $subtotal = $d['cantidad'] * $d['costo_unitario'];
+            if (
+               empty($d['id_producto']) ||
+               empty($d['cantidad']) ||
+               empty($d['costo_unitario'])
+            ) {
+
+               throw new InvalidArgumentException("Detalle Invalido.");
+
+            }
+
+            $cantidad = (int) $d['cantidad'];
+            $costo    = (float) $d['costo_unitario'];
+
+            if ($cantidad <= 0 || $costo < 0) {
+               throw new InvalidArgumentException("Cantidad O Costo Invalido.");
+            }
+
+            $subtotal = $cantidad * $costo;
             $total += $subtotal;
 
-            // Insertar Detalle
+            /* Insertar Detalle */
+
             $det = $this->db->prepare(
                "INSERT INTO detalle_compra
-               (id_compra,id_producto,cantidad,costo_unitario)
-               VALUES (:c,:p,:cant,:cost)");
+               (id_compra, id_producto, cantidad, costo_unitario)
+               VALUES (:c, :p, :cant, :cost)
+            ");
             
             $det->execute([
-               ':c'=>$compraId,
-               ':p'=>$d['id_producto'],
-               ':cant'=>$d['cantidad'],
-               ':cost'=>$d['costo_unitario']
+               ':c'    => $compraId,
+               ':p'    => $d['id_producto'],
+               ':cant' => $cantidad,
+               ':cost' => $costo
             ]);
 
-            // Actualizar Stock
+            /* Actualizar Stock */
+
             $stock = $this->db->prepare(
                "UPDATE productos
                SET stock = stock + :cant
-               WHERE id = :id");
+               WHERE id = :id
+            ");
 
             $stock->execute([
-               ':cant'=>$d['cantidad'],
-               ':id'=>$d['id_producto']
+               ':cant' => $cantidad,
+               ':id'   => $d['id_producto']
             ]);
 
-            // Movimiento Inventario
+            if ($stock->rowCount() === 0) {
+               throw new RuntimeException("Producto No Encontrado.");
+            }
+
+            /* Movimiento Inventario */
+
             $mov = $this->db->prepare(
                "INSERT INTO movimientos_inventario
-               (id_producto,tipo,cantidad,motivo,id_usuario)
-               VALUES (:p,'entrada',:cant,'Compra',:u)");
+               (id_producto, tipo, cantidad, motivo, id_usuario)
+               VALUES (:p, 'entrada', :cant, 'Compra, :u)
+            ");
 
             $mov->execute([
-               ':p'=>$d['id_producto'],
-               ':cant'=>$d['cantidad'],
-               ':u'=>$userId
+               ':p'    => $d['id_producto'],
+               ':cant' => $cantidad,
+               ':u'    => $userId
             ]);
          }
 
-         // Actualizar Total Compra
+         /* Actualizar Total Compra */
+
          $upd = $this->db->prepare(
             "UPDATE compras
             SET total = :t
-            WHERE id = :id"
-         );
+            WHERE id = :id
+         ");
 
          $upd->execute([
-            ':t'=>$total,
-            ':id'=>$compraId
+            ':t'  => $total,
+            ':id' => $compraId
          ]);
 
-         // Commit
          $this->db->commit();
 
          return [
-            'id'=>$compraId,
-            'total'=>$total
+            'id'    => $compraId,
+            'total' => $total
          ];
-      } catch (Exception $e) {
-         $this->db->rollBack();
+
+      } catch (Throwable $e) {
+         
+         if ($this->db->inTransaction()) {
+            $this->db->rollBack();
+         }
+
          throw $e;
+
       }
    }
 
-   public function all() {
+   /* Listar Compras */
+
+   public function all(): array {
 
       $sql = "SELECT
                c.id,
@@ -114,10 +155,55 @@ class Compra {
                ON c.id_proveedor = p.id
             ORDER BY c.id DESC";
 
-      $stmt = $this->db->prepare($sql);
-      $stmt->execute();
-
-      return $stmt->fetchAll();
+      return $this->db
+         ->query($sql)
+         ->fetchAll(PDO::FETCH_ASSOC);
+      
    }
 
+   /* Buscar por ID */
+
+   public function findById(int $id): ?array {
+
+      $sqlCompra = "SELECT
+               c.id,
+               c.fecha,
+               c.total,
+               p.nombre AS proveedor
+            FROM compras c
+            LEFT JOIN proveedores p
+               ON c.id_proveedor = p.id
+            WHERE c.id = :id
+      ";
+
+      $stmt = $this->db->prepare($sqlCompra);
+      $stmt->execute([':id' => $id]);
+
+      $compra = $stmt->fetch(PDO::FETCH_ASSOC);
+
+      if (!$compra) {
+         return null;
+      }
+
+      $sqlDetalle = "SELECT 
+                        d.id_producto,
+                        pr.nombre AS producto,
+                        d.cantidad,
+                        d.costo_unitario
+                     FROM detalle_compra d
+                     INNER JOIN productos pr
+                        ON d.id_producto = pr.id
+                     WHERE d.id_compra = :id
+      ";
+
+      $stmtDetalle = $this->db->prepare($sqlDetalle);
+      $stmtDetalle->execute([':id' => $id]);
+
+      $detalles = $stmtDetalle->fetchAll(PDO::FETCH_ASSOC);
+
+      $compra['detalles'] = $detalles;
+
+      return $compra;
+
+   }
 }

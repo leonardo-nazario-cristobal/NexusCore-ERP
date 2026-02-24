@@ -1,5 +1,7 @@
 <?php
 
+declare (strict_types=1);
+
 require_once __DIR__ . '/../models/Usuario.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/authMiddleware.php';
@@ -7,111 +9,148 @@ require_once __DIR__ . '/../utils/roleMiddleware.php';
 
 class UserController {
 
-   private $usuarioModel;
+   private Usuario $usuarioModel;
 
-   public function __construct() {
-      $this->usuarioModel = new Usuario();
+   public function __construct(PDO $connection) {
+      $this->usuarioModel = new Usuario($connection);
    }
 
-   // Listar Usuarios solo el ADMIN
-   public function index() {
+   /* Listar Usuarios solo el ADMIN */
 
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
+   public function index(): void {
+
+      RoleMiddleware::allow(['admin']);
 
       $users = $this->usuarioModel->all();
 
-      Response::ok($users, "Lista de Usuarios");
+      Response::ok($users, "Lista De Usuarios.");
    }
 
-   // Obtener Usuarios por ID
-   public function show($id) {
+   /* Obtener Usuarios por ID */
 
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
+   public function show(int $id): void {
 
-      $userData = $this->usuarioModel->findById($id);
+      RoleMiddleware::allow(['admin']);
 
-      if (!$userData) {
-         Response::notFound("Usuario no Encontrado");
+      if ($id <= 0) {
+         Response::badRequest("ID Invalido.");
       }
 
-      Response::ok($userData);
+      $user = $this->usuarioModel->findById($id);
+
+      if (!$user) {
+         Response::notFound("Usuario No Encontrado.");
+      }
+
+      Response::ok($user);
    }
 
-   // Crear usuario
-   public function store() {
+   /* Crear usuario */
 
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
+   public function store(): void {
 
-      $input = json_decode(file_get_contents("php://input"), true);
+      RoleMiddleware::allow(['admin']);
 
+      $input = $this->getJsonInput();
+      
       if (
          empty($input['nombre']) ||
          empty($input['correo']) ||
          empty($input['password'])
       ) {
-         Response::validationError(null, "Campos Incompletos");
+         Response::validationError(null, "Campos Incompletos.");
+      }
+
+      if (!filter_var($input['correo'], FILTER_VALIDATE_EMAIL)) {
+         Response::validationError(null, "Correo Invalido.");
       }
 
       $rol = $input['rol'] ?? 'cajero';
+
       try {
-         $newUser = $this->usuarioModel->create(
-            $input['nombre'],
-            $input['correo'],
+         $user = $this->usuarioModel->create(
+            trim($input['nombre']),
+            strtolower(trim($input['correo'])),
             $input['password'],
             $rol
          );
 
-         Response::created($newUser, "Usuario Creado");
+         Response::created($user, "Usuario Creado.");
 
-      } catch (PDOException $e) {
-         Response::conflict("Correo Duplicado");
+      } catch (RuntimeException $e) {
+         Response::conflict($e->getMessage());
       }
    }
 
-   // Update Usuario
-   public function update($id) {
+   /* Actualizar Usuario */
 
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
+   public function update(int $id): void {
+
+      RoleMiddleware::allow(['admin']);
+
+      if ($id <= 0) {
+         Response::badRequest("ID Invalido.");
+      }
+
+      $input = $this->getJsonInput();
+
+      try {
+
+         $update = $this->usuarioModel->update($id, $input);
+
+         if (!$update) {
+            Response::notFound("Usuario No Encontrado.");
+         }
+
+         Response::ok($update, "Usuario Actualizado.");
+
+      } catch (InvalidArgumentException $e) {
+
+         Response::validationError(null, $e->getMessage());
+
+      } catch (RuntimeException $e) {
+
+         Response::conflict($e->getMessage());
+
+      }
+   }
+
+   /* Desactivar Usuario */
+
+   public function destroy(int $id): void {
+
+      $authUser = RoleMiddleware::allow(['admin']);
+
+      if ($id <= 0) {
+         Response::badRequest("ID Invaalido.");
+      }
+
+      /* No permitir auto-desactivarse */
+
+      if ((int)$authUser['sub'] === $id) {
+         Response::error("No Puedes Desactivarte A Ti Mismo.", 400);
+      }
+
+      $user = $this->usuarioModel->deactivate($id);
+
+      if (!$user) {
+         Response::notFound("Usuario No Encontrado.");
+         return;
+      }
+
+      Response::ok($user, "Usuario Desactivado.");
+   }
+
+   /* Utilidades */
+
+   private function getJsonInput(): array {
 
       $input = json_decode(file_get_contents("php://input"), true);
 
-      if (!$input) {
-         Response::badRequest("JSON Invalido");
+      if (!is_array($input)) {
+         Response::badRequest("JSON Invalido.");
       }
 
-      $updated = $this->usuarioModel->update($id, $input);
-
-      if (!$updated) {
-         Response::badRequest("Nada que Actualizar u Usuario no Encontrado");
-      }
-
-      Response::ok($updated, "Usuario Actualizado");
+      return $input;
    }
-
-   // Delete Usuario
-   public function destroy($id) {
-
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
-
-      // No permitir auto-desactivarse
-      if ($user['sub'] == $id) {
-         Response::error("No puedes desactivarte a ti mismo", 400);
-         return;
-      }
-
-      $updatedUser = $this->usuarioModel->deactivate($id);
-
-      if (!$updatedUser) {
-         Response::notFound("Usuario no Encontrado");
-         return;
-      }
-
-      Response::ok($updatedUser, "Usuario Desactivado");
-   }
-
 }

@@ -1,80 +1,84 @@
 <?php
 
+declare (strict_types=1);
+
 require_once __DIR__ . '/../models/Usuario.php';
 require_once __DIR__ . '/../utils/response.php';
 
 class AuthController {
 
-   private $usuarioModel;
+   private Usuario $usuarioModel;
 
-   public function __construct() {
-      $this->usuarioModel = new Usuario();
+   public function __construct(PDO $connection) {
+      $this->usuarioModel = new Usuario($connection);
    }
 
-   // REGISTRO
-   public function register() {
+   /* Registro */
 
-      $input = json_decode(file_get_contents("php://input"), true);
+   public function register(): void {
 
-      if (!$input) {
-         Response::badRequest("JSON inválido");
-      }
+      $input = $this->getJsonInput();
 
       if (
          empty($input['nombre']) ||
          empty($input['correo']) ||
          empty($input['password'])
       ) {
-         Response::validationError(null, "Campos incompletos");
+         Response::validationError(null, "Campos Incompletos.");
+      }
+
+      if (!filter_var($input['correo'], FILTER_VALIDATE_EMAIL)) {
+         Response::validationError(null, "Correo Invalido.");
       }
 
       try {
 
          $user = $this->usuarioModel->create(
-            $input['nombre'],
-            $input['correo'],
+            trim($input['nombre']),
+            strtolower(trim($input['correo'])),
             $input['password']
          );
 
-         Response::created($user, "Usuario creado");
+         Response::created($user, "Usuario Creado.");
 
-      } catch (PDOException $e) {
-         Response::conflict("Correo ya registrado");
+      } catch (RuntimeException $e) {
+
+         Response::conflict($e->getMessage());
+         
       }
    }
 
-   // LOGIN
-   public function login() {
+   /* Login */
 
-      $input = json_decode(file_get_contents("php://input"), true);
+   public function login(): void {
 
-      if (!$input) {
-         Response::badRequest("JSON inválido");
-      }
+      $input = $this->getJsonInput();
 
       if (
          empty($input['correo']) ||
          empty($input['password'])
       ) {
-         Response::validationError(null, "Credenciales incompletas");
+         Response::validationError(null, "Credenciales Invalidas.");
       }
 
-      $user = $this->usuarioModel->findByEmail($input['correo']);
+      $user = $this->usuarioModel->findByEmail(
+         strtolower(trim($input['correo']))
+      );
 
-      if (!$user) {
-         Response::unauthorized("Credenciales incorrectas");
-      }
-
-      if (!$this->usuarioModel->verifyPassword(
+      if (
+         !$user ||
+         !$this->usuarioModel->verifyPassword(
             $input['password'],
             $user['password']
-         )) {
-         Response::unauthorized("Credenciales incorrectas");
+         )
+      ) {
+         Response::unauthorized("Credenciales Incorrectas.");
       }
 
-      // Bloquear usuarios desactivados
+      /* Bloquear usuarios desactivados */
+      
       if (!$user['activo']) {
-         Response::forbidden("Usuario Desactivado");
+         Response::forbidden("Usuario Bloqueado.");
       }
 
       $token = $this->generateJWT($user);
@@ -83,18 +87,35 @@ class AuthController {
 
       Response::ok([
          "token" => $token,
-         "user" => $user
-      ], "Login exitoso");
+         "user"  => $user
+      ], "Login Exitoso.");
+
    }
 
-   // GENERAR JWT
-   private function base64UrlEncode($data) {
+   /* Utilidades */
+
+   private function getJsonInput (): array {
+      
+      $input = json_decode(file_get_contents("php://input"), true);
+      
+      if (!is_array($input)) {
+         Response::badRequest("JSON Invalido.");
+      }
+
+      return $input;
+   }
+
+   private function base64UrlEncode(string $data): string {
       return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
    }
 
-   private function generateJWT($user) {
+   private function generateJWT(array $user): string {
 
       $secret = getenv("JWT_SECRET");
+
+      if (!$secret) {
+         throw new RuntimeException("JSON_SECRET No Configurado.");
+      }
 
       $header = $this->base64UrlEncode(json_encode([
          "alg" => "HS256",
@@ -106,7 +127,7 @@ class AuthController {
          "name" => $user['nombre'],
          "rol" => $user['rol'],
          "iat" => time(),
-         "exp" => time() + 36000
+         "exp" => time() + 3600
       ]));
 
       $signature = hash_hmac(

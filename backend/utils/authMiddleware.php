@@ -1,23 +1,27 @@
 <?php
 
+declare (strict_types=1);
+
 require_once __DIR__ . '/response.php';
 
 class AuthMiddleware {
-   private static function base64UrlDecode($data) {
+
+   private static function base64UrlDecode(string $data): string {
+
       return base64_decode(strtr($data, '-', '+/'));
+
    }
 
-   public static function verify() {
-      $headers = getallheaders();
+   public static function verify(): array {
 
-      if (!isset($headers['Authorization'])) {
-         Response::unauthorized("Token Requerido");
+      $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
+
+      if (!$authHeader) {
+         Response::unauthorized("Token Requerido.");
       }
 
-      $authHeader = $headers['Authorization'];
-
       if(!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-         Response::unauthorized("Formato de Token Invalido");
+         Response::unauthorized("Formato De Token Invalido.");
       }
 
       $token = $matches[1];
@@ -25,12 +29,16 @@ class AuthMiddleware {
       $parts = explode('.', $token);
 
       if (count($parts) !== 3) {
-         Response::unauthorized("Tokend mal Formado");
+         Response::unauthorized("Tokend Mal Formado.");
       }
 
       [$header, $payload, $signature] = $parts;
 
       $secret = getenv("JWT_SECRET");
+
+      if (!$secret) {
+         Response::error("JWT_SECRET No Configurado En El Servidor.", 500);
+      }
 
       $validSignature = hash_hmac(
          'sha256',
@@ -45,7 +53,7 @@ class AuthMiddleware {
       );
 
       if (!hash_equals($validSignature, $signature)) {
-         Response::unauthorized("Firma Invalida");
+         Response::unauthorized("Firma Invalida.");
       }
 
       $payloadData = json_decode(
@@ -53,8 +61,12 @@ class AuthMiddleware {
          true
       );
 
-      if ($payloadData['exp'] < time()) {
-         Response::unauthorized("Token Expirado");
+      if (!is_array($payloadData)) {
+         Response::unauthorized("Payload Invalido.");
+      }
+
+      if (!isset($payloadData['exp']) || $payloadData['exp'] < time()) {
+         Response::unauthorized("Token Expirado.");
       }
 
       return $payloadData;

@@ -1,5 +1,7 @@
 <?php
 
+declare (strict_types=1);
+
 require_once __DIR__ . '/../models/Producto.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/authMiddleware.php';
@@ -7,88 +9,112 @@ require_once __DIR__ . '/../utils/roleMiddleware.php';
 
 class ProductoController {
 
-   private $productoModel;
+   private Producto $productoModel;
 
-   public function __construct() {
-      $this->productoModel = new Producto();
+   public function __construct(PDO $connection) {
+      $this->productoModel = new Producto($connection);
    }
 
-   // Crear Producto
-   public function store() {
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
-      $input = json_decode(file_get_contents("php://input"), true);
+   /* Crear Producto */
+   
+   public function store(): void {
 
-      if (!$input) {
-         Response::badRequest("JSON Invalido");
+      RoleMiddleware::allow(['admin']);
+
+      $input = $this->getJsonInput();
+
+      if (empty(trim($input['nombre'] ?? '' ))) {
+         Response::validationError(null, "Nombre Es Obligatorio.");
       }
 
-      if (empty($input['nombre'])) {
-         Response::validationError(null, "Nombre y Precio son Obligatorios");
-      }
-
-      if ($input['precio'] < 0) {
-         Response::validationError(null, "El precio no puede ser negativo");
+      if (!isset($input['precio']) || $input['precio'] < 0) {
+         Response::validationError(null, "Precio Invalido.");
       }
 
       if (isset($input['stock']) && $input['stock'] < 0) {
-         Response::validationError(null, "Stock inválido");
+         Response::validationError(null, "Stock Invalido.");
       }
 
       try {
-         $producto = $this->productoModel->create($input);
 
-         Response::created($producto, "Producto Creado");
-      } catch (PDOException $e) {
-         Response::serverError("Error al Crear Producto", $e->getMessage());
+         $producto = $this->productoModel->create($input);
+         Response::created($producto, "Producto Creado.");
+
+      } catch (RuntimeException $e) {
+
+         Response::conflict($e->getMessage());
+
       }
    }
 
-   // Listar Productos
-   public function index() {
+   /* Listar Productos */
 
-      $user = AuthMiddleware::verify();
+   public function index(): void {
 
-      $productos = $this->productoModel->list();
+      AuthMiddleware::verify();
 
-      Response::ok($productos, "Lista de Productos con Categoria");
+      $productos = $this->productoModel->all();
+
+      Response::ok($productos, "Lista De Productos Con Categoria.");
    }
 
-   // Update productos
-   public function update($id) {
+   /* Buscar por ID */
 
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
+   public function show(int $id): void {
+
+      AuthMiddleware::verify();
+
+      $producto = $this->productoModel->find($id);
+
+      if (!$producto) {
+         Response::notFound("Producto No Encontrado.");
+      }
+
+      Response::ok($producto, "Detalle Del Producto.");
+   }
+
+   /* Actualizar productos */
+
+   public function update(int $id): void {
+
+      RoleMiddleware::allow(['admin']);
+
+      $input = $this->getJsonInput();
+
+      $updated = $this->productoModel->update($id, $input);
+
+      if (!$updated) {
+         Response::notFound("Producto No Encontrado O Sin Cambios.");
+      }
+
+      Response::ok($updated, "Producto Actualizado.");
+   }
+
+   /* Delete Procucto */
+
+   public function destroy(int $id): void {
+
+      RoleMiddleware::allow(['admin']);
+
+      $producto = $this->productoModel->deactivate($id);
+
+      if (!$producto) {
+         Response::notFound("Producto No Encontrado.");
+      }
+
+      Response::ok($producto, "Producto Desactivado.");
+   }
+
+   /* Utilidades */
+
+   private function getJsonInput(): array {
 
       $input = json_decode(file_get_contents("php://input"), true);
 
-      if (!$input) {
-         Response::badRequest("JSON Invalido");
-      }
-      
-      $update = $this->productoModel->update($id, $input);
-
-      if (!$update) {
-         Response::badRequest("Nada que Actualizar u Producto no Encontrado");
+      if (!is_array($input)) {
+         Response::badRequest("JSON Invalido.");
       }
 
-      Response::ok($update, "Producto Modificado");
+      return $input;
    }
-
-   // Delete Procucto
-   public function destroy($id) {
-
-      $user = AuthMiddleware::verify();
-      RoleMiddleware::allow($user, ['admin']);
-
-      $updatedProducto = $this->productoModel->deactivate($id);
-
-      if (!$updatedProducto) {
-         Response::notFound("Producto no Encontrado");
-         return;
-      }
-
-      Response::ok($updatedProducto, "Producto Desactivado");
-   }
-
 }

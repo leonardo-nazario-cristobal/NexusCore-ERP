@@ -1,16 +1,23 @@
 <?php
 
-require_once __DIR__ . '/../config/database.php';
-
+declare (strict_types=1);
 class Usuario {
-   private $db;
 
-   public function __construct() {
-      $this->db = Database::getConnection();
+   private PDO $db;
+
+   public function __construct(PDO $connection) {
+      $this->db = $connection;
    }
 
-   // Crear usuario
-   public function create($nombre, $correo, $password, $rol = 'cajero') {
+   /* Crear usuario */
+
+   public function create(
+      string $nombre,
+      string $correo,
+      string $password,
+      string $rol = 'cajero'
+      ): array {
+      
       $hash = password_hash($password, PASSWORD_DEFAULT);
 
       $sql = "INSERT INTO usuarios (nombre, correo, password, rol)
@@ -19,102 +26,137 @@ class Usuario {
 
       $stmt = $this->db->prepare($sql);
 
-      $stmt->execute([
-         ':nombre' => $nombre,
-         ':correo' => $correo,
-         ':password' => $hash,
-         ':rol' => $rol
-      ]);
+      try {
 
-      return $stmt->fetch();
+         $stmt->execute([
+            ':nombre'   => $nombre,
+            ':correo'   => $correo,
+            ':password' => $hash,
+            ':rol'      => $rol
+         ]);
+
+         return $stmt->fetch();
+      } catch (PDOException $e) {
+         
+         if ($e->getCode() === '23505') {
+            throw new RangeException("Email Already Exists.");
+         }
+
+         throw $e;
+      }
    }
 
-   // Buscar por correo
-   public function findByEmail($correo) {
+   /* Buscar por correo */
 
-      $sql = "
-         SELECT *
+   public function findByEmail(string $correo): ?array {
+
+      $sql = "SELECT id, nombre, correo, password, rol, activo
          FROM usuarios
          WHERE correo = :correo
          LIMIT 1
       ";
 
       $stmt = $this->db->prepare($sql);
+      $stmt->execute([':correo' => $correo]);
+      
+      $user = $stmt->fetch();
 
-      $stmt->execute([
-         ':correo' => $correo
-      ]);
-
-      return $stmt->fetch(PDO::FETCH_ASSOC);
+      return $user ?: null;
    }
 
-   // Buscar por ID
-   public function findById($id) {
+   /* Buscar por ID */
+
+   public function findById(int $id): ?array {
+
       $sql = "SELECT id, nombre, correo, rol, activo
                FROM usuarios
-               WHERE id = :id";
+               WHERE id = :id
+      ";
 
       $stmt = $this->db->prepare($sql);
       $stmt->execute([':id' => $id]);
-      return $stmt->fetch();
+      return $stmt->fetch() ?: null;
    }
 
-   // Verificar password
-   public function verifyPassword($input, $hash) {
+   /* Verificar password */
+
+   public function verifyPassword(string $input, string $hash): bool {
+
       return password_verify($input, $hash);
+
    }
 
-   // Listar usuarios
-   public function all() { 
+   /* Listar usuarios */
+
+   public function all(): array { 
+
       $sql = "SELECT id, nombre, correo, rol, activo, creado_en
                FROM usuarios
-               ORDER BY id DESC";
-      $stmt = $this->db->query($sql);
-      return $stmt->fetchAll();
+               ORDER BY id DESC
+      ";
+
+      $stmt = $this->db->prepare($sql);
+      $stmt->execute();
+
+      return $stmt->fetchAll(PDO::FETCH_ASSOC);
    }
 
-   // Actualizar usuario
-   public function update($id, $data) {
+   /* Actualizar usuario */
+   
+   public function update(int $id, array $data): ?array {
+
+      $allowedFields = ['nombre', 'correo', 'rol', 'activo', 'password'];
+
       $fields = [];
       $params = [':id' => $id];
 
-      if  (isset($data['nombre'])) {
-         $fields[] = "nombre = :nombre";
-         $params[':nombre'] = $data['nombre'];
-      }
+      foreach ($allowedFields as $field) {
 
-      if (isset($data['correo'])) {
-         $fields[] = "correo = :correo";
-         $params[':correo'] = $data['correo'];
-      }
+         if (!array_key_exists($field, $data)) {
+            continue;
+         }
 
-      if (isset($data['rol'])) {
-         $fields[] = "rol = :rol";
-         $params[':rol'] = $data['rol'];
-      }
+         if ($field === 'password') {
+            $fields[] = "password = :password";
+            $params[':password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+            continue;
+         }
 
-      if (isset($data['activo'])) {
-         $fields[] = "activo = :activo";
-         $params[':activo'] = $data['activo'];
+         $fields[] = "$field = :$field";
+         $params[":$field"] = $data[$field];
       }
 
       if (empty($fields)) {
-         return false;
+         throw new InvalidArgumentException("No Valid Fields Provided For Update");
       }
 
-      $sql = "UPDATE usuarios SET "
-            . implode(', ', $fields)
-            . " WHERE id = :id
-               RETURNING id, nombre, correo, rol, activo";
-      
-      $stmt = $this->db->prepare($sql);
-      $stmt->execute($params);
+      $sql = "UPDATE usuarios
+               SET " . implode(', ', $fields) . " 
+               WHERE id = :id
+               RETURNING id, nombre, correo, rol, activo
+      ";
 
-      return $stmt->fetch();
+      $stmt = $this->db->prepare($sql);
+      
+      try {
+
+         $stmt->execute($params);
+         $updateUser = $stmt->fetch();
+
+         return $updateUser ?: null;
+      } catch (PDOException $e) {
+
+         if ($e->getCode() === '23505') {
+            throw new RuntimeException("Email Already Exists.");
+         }
+
+         throw $e;
+      }
    }
 
-   // Desactivar Usuario
-   public function deactivate($id) {
+   /* Desactivar Usuario */
+
+   public function deactivate(int $id): ?array {
 
       $sql = "UPDATE usuarios
             SET activo = false
@@ -124,6 +166,6 @@ class Usuario {
       $stmt = $this->db->prepare($sql);
       $stmt->execute([':id' => $id]);
 
-      return $stmt->fetch();
+      return $stmt->fetch() ?: null;
    }
 }

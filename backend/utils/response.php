@@ -1,95 +1,139 @@
 <?php
 
+declare (strict_types=1);
+
 class Response {
 
-   // Enviar respuesta JSON estandar
+   // Método Base
    private static function send(
       bool $success,
-      $data,
+      mixed $data,
       string $message,
       int $status
-   ) {
+   ): void {
       http_response_code($status);
+      header('Content-Type: application/json');
 
       echo json_encode([
          "success" => $success,
-         "status" => $status,
+         "status"  => $status,
          "message" => $message,
-         "data" => $data
+         "data"    => $data
       ], JSON_UNESCAPED_UNICODE);
+      
       exit;
    }
 
-   // Alias estándar (muchos controladores usan success)
-   public static function success(
-      string $message = "OK",
-      $data = null
-   ) {
+
+   /* Respuestas Exitosas */
+
+   public static function ok(
+
+      mixed $data = null,
+      string $message = "OK"
+      
+   ): void {
+
       self::send(true, $data, $message, 200);
+
    }
 
-   // Respuesta exitosa
-   public static function ok($data = null, string $message = "OK") {
-      self::send(true, $data, $message, 200);
-   }
+   public static function created(
 
-   public static function created($data = null, string $message = "Recurso Creado") {
+      mixed $data = null,
+      string $message = "Recurso Creado"
+
+   ): void {
+
       self::send(true, $data, $message, 201);
+
    }
 
-   public static function noContent() {
-      http_response_code(204);
-      exit;
-   }
    
-   // Errores de cliente
-   public static function badRequest(string $message = "Solicitud Inválida") {
+   /* Errores de cliente */
+   
+   public static function badRequest(
+
+      string $message = "Solicitud Inválida"
+      
+   ): void {
+
       self::send(false, null, $message, 400);
+
    }
 
-   public static function unauthorized(string $message = "No Autenticado") {
+   public static function unauthorized(
+      
+      string $message = "No Autenticado"
+      
+   ): void {
+
       self::send(false, null, $message, 401);
+
    }
 
-   public static function forbidden(string $message = "Acceso Prohibido") {
+   public static function forbidden(
+      
+      string $message = "Acceso Prohibido"
+      
+   ): void {
+
       self::send(false, null, $message, 403);
+
    }
 
-   public static function notFound(string $message = "Recurso no Encontrado") {
+   public static function notFound(
+      
+      string $message = "Recurso No Encontrado"
+      
+   ): void {
+
       self::send(false, null, $message, 404);
+
    }
 
-   public static function conflict(string $message= "Conflicto en la Solicitud") {
+   public static function conflict(
+      
+      string $message= "Conflicto En La Solicitud"
+   
+   ): void {
+
       self::send(false, null, $message, 409);
+
    }
 
    public static function validationError(
-      $errors,
-      string $message = "Error de Validación"
-   ) {
+
+      mixed $errors,
+      string $message = "Error De Validación"
+
+   ): void {
+
       self::send(false, $errors, $message, 422);
+
    }
 
-   // Error servidor
+   /* Error servidor */
    public static function serverError(
-      string $message = "Error Interno del Servidor",
-      $debug = null
-   ) {
-      $data = null;
 
-      if ($debug !== null) {
-         $data = $debug;
-      }
-      self::send(false, $data, $message, 500);
+      string $message = "Error Interno Del Servidor",
+      mixed $debug = null
+
+   ): void {
+
+      self::send(false, $debug, $message, 500);
+
    }
 
-   // Método genérico de error (NUEVO)
    public static function error(
+
       string $message,
       int $status = 500,
-      $data = null
-   ) {
-      self::send(false, $data, $message, $status);
-   }
+      mixed $data = null
 
+   ): void {
+
+      self::send(false, $data, $message, $status);
+      
+   }
 }

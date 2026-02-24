@@ -1,5 +1,7 @@
 <?php
 
+declare (strict_types=1);
+
 require_once __DIR__ . '/../models/MovimientoInventario.php';
 require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../utils/authMiddleware.php';
@@ -7,20 +9,23 @@ require_once __DIR__ . '/../utils/roleMiddleware.php';
 
 class MovimientoInventarioController {
    
-   private $MovInModel;
+   private MovimientoInventario $MovInModel;
 
-   public function __construct() {
-      $this->MovInModel = new MovimientoInventario();
+   public function __construct(PDO $connection) {
+      $this->MovInModel = new MovimientoInventario($connection);
    }
 
-   public function store() {
+   /* Crear Movimiento */
+
+   public function store(): void {
 
       $user = AuthMiddleware::verify();
 
       $input = json_decode(file_get_contents("php://input"), true);
 
-      if (!$input) {
-         Response::badRequest("JSON Invalido");
+      if (!is_array($input)) {
+         Response::badRequest("JSON Invalido.");
+         return;
       }
 
       if (
@@ -28,21 +33,29 @@ class MovimientoInventarioController {
          empty($input['tipo']) ||
          empty($input['cantidad'])
       ) {
-         Response::validationError(null, "Datos, Incompletos");
+         Response::validationError(null, "Datos, Incompletos.");
       }
 
-      if ($input['cantidad'] <= 0) {
+      if ((int)$input['cantidad'] <= 0) {
          Response::validationError(null, "Cantidad Invalida");
+      }
+
+      if (!in_array($input['tipo'], ['entrada', 'salida', 'ajuste'], true)) {
+         Response::validationError(null, "Tipo De Movimiento Invalido.");
       }
 
       $input['id_usuario'] = $user['sub'];
 
       try {
+
          $mov = $this->MovInModel->create($input);
 
-         Response::created($mov, "Movimiento Generado");
-      } catch (PDOException $e) {
-         Response::serverError("Error al Genear Movimiento", $e->getMessage());
+         Response::created($mov, "Movimiento Generado.");
+
+      } catch (InvalidArgumentException $e) {
+         Response::validationError(null, $e->getMessage());
+      } catch (Throwable $e) {
+         Response::serverError("Error Al Generar Movimiento.");
       }
       
    }
@@ -50,10 +63,15 @@ class MovimientoInventarioController {
    // Listar Movimientos 
    public function index() {
 
-      $user = AuthMiddleware::verify();
+      AuthMiddleware::verify();
 
-      $data = $this->MovInModel->all();
+      try {
 
-      Response::ok($data, "Historial Inventario");
+         $data = $this->MovInModel->all();
+         Response::ok($data, "Historial Inventario.");
+         
+      } catch (Throwable $e) {
+         Response::serverError("Error Al Listar Movimiento.", $e->getMessage());
+      }
    }
 }
